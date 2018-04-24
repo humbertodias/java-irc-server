@@ -5,6 +5,7 @@
     <groupId>com.irc</groupId>
     <artifactId>server</artifactId>
     <version>0.0.1</version>
+    <packaging>jar</packaging>
     <description>Text IRC Server</description>
 
     <properties>
