@@ -20,8 +20,8 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
     private static final String IRC_USER = "Server";
     private static final String CRLF = "\r\n";
     private static final String CRLF_DOUBLE = CRLF + CRLF;
+    private static final int MAX_LAST_MESSAGES = 5;
     private static final int MAX_CLIENTS_PER_CHANNEL = 10;
-    private static final int LAST_N_MESSAGES = 5;
 
     private static final ChannelGroup channelsGroup = new DefaultChannelGroup(new DefaultEventExecutor());
     private static final ConcurrentMap<ChannelId, String> channels = new ConcurrentHashMap();
@@ -49,7 +49,6 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
     }
 
     private void invalidCommand(Channel incoming) {
-//        incoming.writeAndFlush("[" + IRC_USER + "] - Invalid command." + CRLF_DOUBLE);
         // always combine operation if possible when act on the Channel from outise the eventloop
         incoming.eventLoop().execute(() -> incoming.writeAndFlush("[" + IRC_USER + "] - Invalid command." + CRLF_DOUBLE));
     }
@@ -91,18 +90,24 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
 
     private void leave(ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
-        incoming.writeAndFlush("[" + IRC_USER + "] - Leaving... " + CRLF_DOUBLE);
+        incoming.writeAndFlush("[" + IRC_USER + "] - Leaving..." + CRLF_DOUBLE);
 
         // If the user is inside a channel, notify other users (Logged activity)
         String previousChannelName = channels.get(incoming.id());
         if (previousChannelName != null) {
             String msg = "[" + IRC_USER + "] - " + users.get(incoming.id()) + " has left the channel.";
             addMessageToActivityLogs(previousChannelName, msg);
-            channelsGroup.forEach(channel -> {
-                if (channels.get(channel.id()).equals(previousChannelName) && !channel.equals(incoming)) {
-                    channel.writeAndFlush(msg + CRLF_DOUBLE);
-                }
-            });
+
+            channelsGroup.parallelStream()
+                    .filter(channel -> previousChannelName.equals(channel.id()))
+                    .filter(channel -> !channel.equals(incoming))
+                    .forEach(channel -> channel.writeAndFlush(msg + CRLF_DOUBLE)
+                    );
+
+            channelsGroup.parallelStream()
+                    .filter(channel -> channels.get(channel.id()).equals(previousChannelName) && !channel.equals(incoming))
+                    .forEach(channel -> channel.writeAndFlush(msg + CRLF_DOUBLE)
+            );
         }
         // Close connection
         ctx.close();
@@ -116,12 +121,9 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         // Send text message to the other users in the same channel (Logged activity)
         if (channelName != null) {
             addMessageToActivityLogs(channelName, message);
-            channelsGroup.forEach(channel -> {
-                if (channels.get(channel.id()).equals(channelName) && !channel.equals(incoming)) {
-                    channel.writeAndFlush(message + CRLF);
-                }
-
-            });
+            channelsGroup.parallelStream()
+                    .filter(channel -> channels.get(channel.id()).equals(channelName) && !channel.equals(incoming))
+                    .forEach(channel -> channel.writeAndFlush(message + CRLF));
         } else {
             incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF_DOUBLE);
         }
@@ -147,7 +149,6 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
 
     private synchronized void join(ChannelHandlerContext ctx, String channelName) {
         Channel incoming = ctx.channel();
-        String msg;
 
         // Check if the user is logged in
         if (!users.containsKey(incoming.id())) {
@@ -168,13 +169,12 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         String previousChannelName = channels.get(incoming.id());
         if (previousChannelName != null) {
             incoming.writeAndFlush("[" + IRC_USER + "] - Left channel " + previousChannelName + "." + CRLF);
-            msg = "[" + IRC_USER + "] - " + users.get(incoming.id()) + " has left the channel.";
-            addMessageToActivityLogs(previousChannelName, msg);
-            for (Channel channel : channelsGroup) {
-                if (channels.get(channel.id()).equals(previousChannelName) && !channel.equals(incoming)) {
-                    channel.writeAndFlush(msg + CRLF_DOUBLE);
-                }
-            }
+            final String msgLeft = "[" + IRC_USER + "] - " + users.get(incoming.id()) + " has left the channel.";
+            addMessageToActivityLogs(previousChannelName, msgLeft);
+            channelsGroup.parallelStream()
+                    .filter(channel -> channel.id().equals(previousChannelName))
+                    .filter(channel -> !channel.equals(incoming))
+                    .forEach(channel -> channel.writeAndFlush(msgLeft + CRLF_DOUBLE));
         }
 
         // User joins channel
@@ -182,19 +182,17 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         channels.put(incoming.id(), channelName);
 
         // Notification to other users (Logged activity)
-        msg = "[" + IRC_USER + "] - " + users.get(incoming.id()) + " has joined the channel.";
-        addMessageToActivityLogs(channelName, msg);
-        for (Channel channel : channelsGroup) {
-            if (channels.get(channel.id()).equals(channelName) && !channel.equals(incoming)) {
-                channel.writeAndFlush(msg + CRLF_DOUBLE);
-            }
-        }
+        final String msgJoined = "[" + IRC_USER + "] - " + users.get(incoming.id()) + " has joined the channel.";
+        addMessageToActivityLogs(channelName, msgJoined);
+        channelsGroup.parallelStream()
+                .filter(channel -> channels.get(channel.id()).equals(channelName) && !channel.equals(incoming))
+                .forEach(channel -> channel.writeAndFlush(msgJoined + CRLF_DOUBLE));
 
         // Show this channel's last N messages of activity to the joining user
         if (lastActivityLogs.get(channelName) != null) {
-            for (String str : lastActivityLogs.get(channelName)) {
-                incoming.writeAndFlush(str + CRLF);
-            }
+            lastActivityLogs.get(channelName)
+                    .parallelStream()
+                    .forEach(str -> incoming.writeAndFlush(str + CRLF));
         }
         incoming.writeAndFlush(CRLF);
     }
@@ -207,41 +205,22 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
             lastActivityLogs.put(channelName, activity);
         }
         activity.add(msg);
-        while (activity.size() > LAST_N_MESSAGES)
+        while (activity.size() > MAX_LAST_MESSAGES)
             activity.remove(0);
     }
-
-/*    private void showUsers(ChannelHandlerContext ctx) {
-        Channel incoming = ctx.channel();
-        String channelName = channels.get(incoming.id());
-        if (channelName != null) {
-            incoming.writeAndFlush("[" + IRC_USER + "] - List of users in channel " + channelName + ":" + CRLF);
-            channelsGroup.forEach(channel -> {
-                if (channelName.equals(channels.get(channel.id()))) {
-                    incoming.writeAndFlush(users.get(channel.id()) + CRLF);
-                }
-            });
-            incoming.writeAndFlush(CRLF);
-        } else {
-            incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF_DOUBLE);
-        }
-    }
-    */
 
     private void showUsers(ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
         String channelName = channels.get(incoming.id());
-        if(channelName != null) {
+        if (channelName != null) {
             incoming.writeAndFlush("[" + IRC_USER + "] - List of users in channel " + channelName + ":" + CRLF);
-            for (Channel c : channelsGroup) {
-                if(channelName.equals(channels.get(c.id()))){
-                    incoming.writeAndFlush(users.get(c.id()) + CRLF);
-                }
-            }
+            channelsGroup.parallelStream()
+                    .filter(channel -> channelName.equals(channels.get(channel.id())))
+                    .forEach(channel -> incoming.writeAndFlush(users.get(channel.id()) + CRLF)
+            );
             incoming.writeAndFlush(CRLF);
-        }
-        else{
-            incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF + CRLF);
+        } else {
+            incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF_DOUBLE);
         }
     }
 

@@ -1,12 +1,13 @@
 import com.irc.ChannelHandler;
 import io.netty.channel.embedded.EmbeddedChannel;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
 import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class ServerTest {
-
+public class ServerTest  {
 
     private EmbeddedChannel channel;
 
@@ -29,7 +30,7 @@ public class ServerTest {
         // clean buffer
         channel.releaseOutbound();
         channel.writeInbound("/join room_1\r\n");
-        assertEquals("[Server] - Joined channel room_1.\r\n\r\n", channel.readOutbound());
+        assertEquals("[Server] - Joined channel room_1.\r\n", channel.readOutbound());
     }
 
     @Test
@@ -52,21 +53,17 @@ public class ServerTest {
         // clean buffer
         channel.releaseOutbound();
         channel.writeInbound("/users\r\n");
-        StringBuilder sb = new StringBuilder();
 
         String read;
-        do {
-            read = channel.readOutbound();
-            if(read == null) break;
+        StringBuilder sb = new StringBuilder();
+        while((read = channel.readOutbound()) != null)
             sb.append(read);
-        }while (true);
 
-        assertEquals("[Server] - List of users in channel room_1:\r\n\r\n", sb.toString());
+        assertEquals("[Server] - List of users in channel room_1:\r\nuser3\r\n\r\n", sb.toString());
     }
 
     @Test
     public void invalidCommandTest() {
-        EmbeddedChannel channel = new EmbeddedChannel( new ChannelHandler() );
         // clean buffer
         channel.releaseOutbound();
         channel.writeInbound("/login a b c d e\r\n");
