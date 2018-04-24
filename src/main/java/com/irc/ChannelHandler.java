@@ -49,7 +49,9 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
     }
 
     private void invalidCommand(Channel incoming) {
-        incoming.writeAndFlush("[" + IRC_USER + "] - Invalid command." + CRLF_DOUBLE);
+//        incoming.writeAndFlush("[" + IRC_USER + "] - Invalid command." + CRLF_DOUBLE);
+        // always combine operation if possible when act on the Channel from outise the eventloop
+        incoming.eventLoop().execute(() -> incoming.writeAndFlush("[" + IRC_USER + "] - Invalid command." + CRLF_DOUBLE));
     }
 
     @Override
@@ -209,12 +211,12 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
             activity.remove(0);
     }
 
-    private void showUsers(ChannelHandlerContext ctx) {
+/*    private void showUsers(ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
         String channelName = channels.get(incoming.id());
         if (channelName != null) {
             incoming.writeAndFlush("[" + IRC_USER + "] - List of users in channel " + channelName + ":" + CRLF);
-            channelsGroup.stream().forEach(channel -> {
+            channelsGroup.forEach(channel -> {
                 if (channelName.equals(channels.get(channel.id()))) {
                     incoming.writeAndFlush(users.get(channel.id()) + CRLF);
                 }
@@ -222,6 +224,24 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
             incoming.writeAndFlush(CRLF);
         } else {
             incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF_DOUBLE);
+        }
+    }
+    */
+
+    private void showUsers(ChannelHandlerContext ctx) {
+        Channel incoming = ctx.channel();
+        String channelName = channels.get(incoming.id());
+        if(channelName != null) {
+            incoming.writeAndFlush("[" + IRC_USER + "] - List of users in channel " + channelName + ":" + CRLF);
+            for (Channel c : channelsGroup) {
+                if(channelName.equals(channels.get(c.id()))){
+                    incoming.writeAndFlush(users.get(c.id()) + CRLF);
+                }
+            }
+            incoming.writeAndFlush(CRLF);
+        }
+        else{
+            incoming.writeAndFlush("[" + IRC_USER + "] - You are not in a channel." + CRLF + CRLF);
         }
     }
 
