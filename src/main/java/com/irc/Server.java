@@ -22,7 +22,7 @@ import io.netty.handler.logging.LoggingHandler;
 public final class Server {
 
     public static void main(final String... args) throws Exception {
-        final int PORT = Integer.parseInt(System.getProperty("port", "6666"));
+        final int port = Integer.parseInt(System.getProperty("port", "6666"));
         EventLoopGroup bossGroup = new NioEventLoopGroup();
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {
@@ -44,7 +44,7 @@ public final class Server {
                     });
 
             // Bind and start to accept incoming connections.
-            ChannelFuture channelFuture = serverBootstrap.bind(PORT).sync();
+            ChannelFuture channelFuture = serverBootstrap.bind(port).sync();
 
             // Wait until the server socket is closed.
             channelFuture.channel().closeFuture().sync();
