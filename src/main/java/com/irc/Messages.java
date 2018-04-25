@@ -32,9 +32,16 @@ public final class Messages {
     public static final String USER_HAS_JOINNED_CHANNEL = "[{0}] - {1} has joined the channel.";
     public static final String LIST_OF_USERS_IN_CHANNEL = "[{0}] - List of users in channel {1}:" + CRLF;
 
-    private Messages(){}
+    private Messages() {
+    }
 
-    public static String format(String message, Object ... parameters) {
+    /**
+     *
+     * @param message
+     * @param parameters
+     * @return
+     */
+    public static String format(final String message, final Object ... parameters) {
         final MessageFormat messageFormat = new MessageFormat(message);
         return messageFormat.format(parameters);
     }

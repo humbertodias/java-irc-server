@@ -21,6 +21,9 @@ import io.netty.handler.logging.LoggingHandler;
  */
 public final class Server {
 
+    private Server() {
+    }
+
     public static void main(final String... args) throws Exception {
         final int port = Integer.parseInt(System.getProperty("port", "6666"));
         EventLoopGroup bossGroup = new NioEventLoopGroup();
