@@ -8,6 +8,9 @@ import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertEquals;
 
+/**
+ * Tests.
+ */
 public class ServerTest  {
 
     private EmbeddedChannel channel;
@@ -19,7 +22,7 @@ public class ServerTest  {
 
     @Test
     public void bannerTest() {
-        assertEquals(Messages.format(Messages.BANNER,"Server"), channel.readOutbound());
+        assertEquals(Messages.format(Messages.WELCOME_BANNER,"Server"), channel.readOutbound());
     }
 
     @Test

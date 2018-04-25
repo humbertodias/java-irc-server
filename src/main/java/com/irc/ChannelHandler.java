@@ -28,25 +28,25 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
     private static final ConcurrentMap<String, Vector<String>> lastActivityLogs = new ConcurrentHashMap();
 
     @Override
-    public void handlerAdded(ChannelHandlerContext ctx) {
+    public void handlerAdded(final ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
-        incoming.writeAndFlush(Messages.format(Messages.BANNER, IRC_USER));
+        incoming.writeAndFlush(Messages.format(Messages.WELCOME_BANNER, IRC_USER));
         channelsGroup.add(incoming);
     }
 
     @Override
-    public void handlerRemoved(ChannelHandlerContext ctx) {
+    public void handlerRemoved(final ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
         channelsGroup.remove(incoming);
     }
 
-    private void invalidCommand(Channel incoming) {
+    private void invalidCommand(final Channel incoming) {
         // always combine operation if possible when act on the Channel from outise the eventloop
-        incoming.eventLoop().execute(() -> incoming.writeAndFlush( Messages.format(Messages.INVALID_COMMAND, IRC_USER)) );
+        incoming.eventLoop().execute(() -> incoming.writeAndFlush(Messages.format(Messages.INVALID_COMMAND, IRC_USER)));
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, String str) {
+    protected void channelRead0(final ChannelHandlerContext ctx, final String str) {
         Channel incoming = ctx.channel();
         String[] tokens = str.split("\\s+");
 
@@ -80,7 +80,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         }
     }
 
-    private void leave(ChannelHandlerContext ctx) {
+    private void leave(final ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
         incoming.writeAndFlush(Messages.format(Messages.LEAVING, IRC_USER));
         String username = users.get(incoming.id());
@@ -114,7 +114,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
 
     }
 
-    private void sendMessage(ChannelHandlerContext ctx, String str) {
+    private void sendMessage(final ChannelHandlerContext ctx, final String str) {
         Channel incoming = ctx.channel();
         String channelName = channels.get(incoming.id());
         String message = "[" + users.get(incoming.id()) + "] - " + str;
@@ -130,7 +130,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         }
     }
 
-    private synchronized void login(ChannelHandlerContext ctx, String username, String password) {
+    private synchronized void login(final ChannelHandlerContext ctx, final String username, final String password) {
         Channel incoming = ctx.channel();
         if (userProfiles.containsKey(username)) {
             if (userProfiles.get(username).equals(password)) {
@@ -148,7 +148,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         channels.remove(incoming.id());
     }
 
-    private synchronized void join(ChannelHandlerContext ctx, String channelName) {
+    private synchronized void join(final ChannelHandlerContext ctx, final String channelName) {
         Channel incoming = ctx.channel();
 
         // Check if the user is logged in
@@ -161,7 +161,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         int counter = 0;
         for (String value : channels.values()) {
             if (channelName.equals(value) && ++counter >= MAX_CLIENTS_PER_CHANNEL) {
-                incoming.writeAndFlush(Messages.format(Messages.CHANNEL_IS_CURRENTLY_FULL,IRC_USER,channelName));
+                incoming.writeAndFlush(Messages.format(Messages.CHANNEL_IS_CURRENTLY_FULL, IRC_USER, channelName));
                 return;
             }
         }
@@ -169,8 +169,8 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         // If the user was previously in a different channel notify leave to others (Logged activity)
         String previousChannelName = channels.get(incoming.id());
         if (previousChannelName != null) {
-            incoming.writeAndFlush(Messages.format(Messages.LEFT_CHANNEL,IRC_USER,previousChannelName));
-            final String msgLeft = Messages.format(Messages.USER_HAS_LEFT_CHANNEL,IRC_USER,users.get(incoming.id()));
+            incoming.writeAndFlush(Messages.format(Messages.LEFT_CHANNEL, IRC_USER, previousChannelName));
+            final String msgLeft = Messages.format(Messages.USER_HAS_LEFT_CHANNEL, IRC_USER, users.get(incoming.id()));
             addMessageToActivityLogs(previousChannelName, msgLeft);
             channelsGroup.stream()
                     .filter(channel -> channel.id().equals(previousChannelName))
@@ -179,11 +179,11 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         }
 
         // User joins channel
-        incoming.writeAndFlush(Messages.format(Messages.JOINNED_CHANNEL,IRC_USER,channelName));
+        incoming.writeAndFlush(Messages.format(Messages.JOINNED_CHANNEL, IRC_USER, channelName));
         channels.put(incoming.id(), channelName);
 
         // Notification to other users (Logged activity)
-        final String msgJoined = Messages.format(Messages.USER_HAS_JOINNED_CHANNEL,IRC_USER, users.get(incoming.id()));
+        final String msgJoined = Messages.format(Messages.USER_HAS_JOINNED_CHANNEL, IRC_USER, users.get(incoming.id()));
         addMessageToActivityLogs(channelName, msgJoined);
         channelsGroup.stream()
                 .filter(channel -> channels.get(channel.id()).equals(channelName) && !channel.equals(incoming))
@@ -198,7 +198,7 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
         incoming.writeAndFlush(Messages.CRLF);
     }
 
-    private synchronized void addMessageToActivityLogs(String channelName, String msg) {
+    private synchronized void addMessageToActivityLogs(final String channelName, final String msg) {
         // Add activity to last channel activity logs
         Vector activity = lastActivityLogs.get(channelName);
         if (activity == null) {
@@ -206,27 +206,28 @@ public class ChannelHandler extends SimpleChannelInboundHandler<String> {
             lastActivityLogs.put(channelName, activity);
         }
         activity.add(msg);
-        while (activity.size() > MAX_LAST_MESSAGES)
+        while (activity.size() > MAX_LAST_MESSAGES) {
             activity.remove(0);
+        }
     }
 
-    private void showUsers(ChannelHandlerContext ctx) {
+    private void showUsers(final ChannelHandlerContext ctx) {
         Channel incoming = ctx.channel();
         String channelName = channels.get(incoming.id());
         if (channelName != null) {
-            incoming.writeAndFlush(Messages.format(Messages.LIST_OF_USERS_IN_CHANNEL,IRC_USER,channelName));
+            incoming.writeAndFlush(Messages.format(Messages.LIST_OF_USERS_IN_CHANNEL, IRC_USER, channelName));
             channelsGroup.stream()
                     .filter(channel -> channelName.equals(channels.get(channel.id())))
                     .forEach(channel -> incoming.writeAndFlush(users.get(channel.id()) + Messages.CRLF)
             );
             incoming.writeAndFlush(Messages.CRLF);
         } else {
-            incoming.writeAndFlush(Messages.format(Messages.YOU_ARE_NOT_IN_A_CHANNEL,IRC_USER));
+            incoming.writeAndFlush(Messages.format(Messages.YOU_ARE_NOT_IN_A_CHANNEL, IRC_USER));
         }
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    public void exceptionCaught(final ChannelHandlerContext ctx, final Throwable cause) {
         // Close the connection when an exception is raised.
         cause.printStackTrace();
         ctx.close();
